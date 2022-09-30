@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-from cmath import inf
 import sqlite3, psycopg2, sys
-from webbrowser import get
-from venv import create
-
-
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--sqlite', type=str, required=True)
@@ -26,14 +20,11 @@ con = sqlite3.connect(args.sqlite)
 
 
 #Postgres database parameters
-pgdb=args.pgdb
-pguser=args.pguser
-pgpswd=args.pgpwd
-pghost=args.pghost
-pgport=args.pgport
-pgschema='public'
-conpg = psycopg2.connect(database=pgdb, user=pguser, password=pgpswd,
-                               host=pghost, port=pgport)
+conpg = psycopg2.connect(database=args.pgdb,
+                         user=args.pguser,
+                         password=args.pgpwd,
+                         host=args.pghost,
+                         port=args.pgport)
 
 
 
@@ -41,9 +32,8 @@ conpg = psycopg2.connect(database=pgdb, user=pguser, password=pgpswd,
 
 def get_psql_tables(conpg):
     ''':returns: all tables in given database'''
-    con = conpg
     tabnames=[]
-    curpg = con.cursor()
+    curpg = conpg.cursor()
     curpg.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;") 
 
     tabgrab = curpg.fetchall()
@@ -53,12 +43,11 @@ def get_psql_tables(conpg):
 
 
 
-def postgresColNames(conpg,table):
+def postgresColNames(conpg, table):
     ''':returns: column names in given table'''
-    con = conpg
-    colnames= []
-    curpg =con.cursor()
-    query = "select * from " + table + " limit 1"
+    colnames = []
+    curpg = conpg.cursor()
+    query = f"SELECT * FROM {table} LIMIT 1"
     curpg.execute(query)
     col_names=[i for i in curpg.description]
     for col in col_names:
@@ -70,42 +59,19 @@ def postgresColNames(conpg,table):
 
 def get_col_datatype(conpg,table):
     ''':returns: datatype of all columns in given table'''
-    con = conpg
-    curpg = con.cursor()
+    curpg = conpg.cursor()
     list = []
-    for col in postgresColNames(con,table):
-        curpg.execute("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '"+ table + "' AND column_name = '"+ col+"';")
+    for col in postgresColNames(conpg, table):
+        curpg.execute(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{col}';")
         list  += curpg.fetchall()
     return list
 
-
-
-
-def split_col_tuple(lst):
-    ''':returns: two seperate lists of given name/type tuple'''
-    lst1 = []
-    lst2 = []
-    for x, y in lst:
-        lst1.append(x)
-        lst2.append(y)
-    return (lst1, lst2)
-
-
-
-
-
-def get_create_statement(conpg,table):
+def get_create_statement(conpg, table):
     ''':returns: create statement of given table'''
-    query = "CREATE TABLE IF NOT EXISTS " +  table + "("
-    col, typ = split_col_tuple(get_col_datatype(conpg,table))
-    for i in range(len((col))):
-        query += col[i]
-        query += " "
-        query += typ[i]
-        query += ", "
-    query = query[:-2]
+    query = f"CREATE TABLE IF NOT EXISTS {table} ("
+    query += ', '.join([f'{column} {type}' for column, type in get_col_datatype(conpg, table)])
     query+= ");"
-    query = str(query).replace("character varying","varchar(256)").replace("key integer", "key integer NOT NULL PRIMARY KEY AUTOINCREMENT")
+    query = query.replace("character varying", "varchar(256)").replace("key integer", "key integer NOT NULL PRIMARY KEY AUTOINCREMENT")
     return query
 
 
@@ -113,33 +79,24 @@ def get_create_statement(conpg,table):
 
 def get_all_creates(conpg,tables):
     ''':returns: all creates of a database in a list'''
-    list = []
-    for table in tables:
-        x = get_create_statement(conpg,table)
-        list.append(x)
-    return list
-
-
+    return [get_create_statement(conpg, table) for table in tables]
 
 
 cursq = con.cursor()
 for create in get_all_creates(conpg,get_psql_tables(conpg)):
-    if create == get_all_creates(conpg,get_psql_tables(conpg))[:-1]:
-        continue
-    else:
-        cursq.execute(create)
-        print(create)
+    cursq.execute(create)
+    print(create)
 
 
 for table in get_psql_tables(conpg):
     curpg = conpg.cursor()
     curpg.execute("SELECT * FROM %s;" %table)
-    rows=curpg.fetchall()
+    rows = curpg.fetchall()
     try:
         if len(rows) > 0:
-            colcount=len(rows[0])
-            pholder='?,'*colcount
-            newholder=pholder[:-1]
+            colcount = len(rows[0])
+            pholder = '?,' * colcount
+            newholder = pholder[:-1]
             cursq.executemany(f'INSERT INTO {table} VALUES ({newholder});', rows)
             print("Inserted into", table)
             con.commit()
@@ -151,20 +108,3 @@ for table in get_psql_tables(conpg):
 conpg.close()
 con.close()
  
-
-        
-
-    
-
-
-
-
-
-
-
-
-
-
-#get create statements for tables and change them to sqlite syntax
-#for table in showPostgresTables(con):
-#   curpg = con.cursor
