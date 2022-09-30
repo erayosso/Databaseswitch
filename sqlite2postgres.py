@@ -55,7 +55,7 @@ def get_boolean_columns(table_name):
     cursorObj = con.cursor()
     cursorObj.execute("PRAGMA table_info(" +table_name +");")
     tables = cursorObj.fetchall()
-    return [item[1] for item in tables if item[2] == "boolean"]
+    return [item[1] for item in tables if item[2] == "boolean" or item[2] == "BOOL"]
 
 
 
@@ -84,10 +84,15 @@ for table in get_sqlite_tables(con):
     cursq.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name = ?;", (table,))
     create = cursq.fetchone()[0]
     create = str(create).replace("`", "") \
+                        .replace('"','') \
                         .replace("integer NOT NULL PRIMARY KEY AUTOINCREMENT","SERIAL PRIMARY KEY") \
+                        .replace("INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT","SERIAL PRIMARY KEY") \
                         .replace("blob","BYTEA") \
+                        .replace("BLOB","BYTEA") \
                         .replace("bigint","BIGINT") \
-                        .replace("varchar","VARCHAR")
+                        .replace("varchar","VARCHAR") \
+                        .replace("INTEGER","BIGINT")   \
+                        .replace("BOOL","boolean")
     print(create)
 
     
